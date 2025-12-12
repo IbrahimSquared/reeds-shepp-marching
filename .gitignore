@@ -39,3 +39,15 @@
 
 # debug information files
 *.dwo
+
+*.swp
+*.swo
+.vscode
+build
+# output
+.cache
+
+RS_marching
+*.out
+
+FlameGraph
