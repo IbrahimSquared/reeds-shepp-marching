@@ -124,4 +124,5 @@ Set the cmakePath accordingly in settings.json: <br>
 `"cmake.cmakePath": "C:\\Workdir\\Programs\\msys64\\mingw64\\bin\\cmake.exe",` <br>
 This has been tested with the CMake Kit `GCC 12.2.0 x86_64-w64-mingw32` both in release and debug modes.
 
-# Instructions to run the RRT* RS OMPL planner for comparison
+# Instructions to run the RRT\* RS OMPL planner for comparison
+
