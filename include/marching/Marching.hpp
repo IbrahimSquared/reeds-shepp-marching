@@ -120,17 +120,25 @@ private:
   // }
 
   // Another possible hash function that is more evenly distributed
-  inline int hashFunction(const int x, const int y,
-                          const int lightSourceNumber) const {
-    const int prime1 = 73856093;
-    const int prime2 = 19349663;
-    const int prime3 = 83492791;
+  // inline int hashFunction(const int x, const int y,
+  //                         const int lightSourceNumber) const {
+  //   const int prime1 = 73856093;
+  //   const int prime2 = 19349663;
+  //   const int prime3 = 83492791;
+  //
+  //   // Mix the input values using primes and combine them
+  //   const auto key = (x * prime1) ^ (y * prime2) ^ (lightSourceNumber *
+  //   prime3);
+  //   // return key;
+  //   const int modulus = 1000000007;
+  //   return key % modulus;
+  // }
 
-    // Mix the input values using primes and combine them
-    const auto key = (x * prime1) ^ (y * prime2) ^ (lightSourceNumber * prime3);
-    // return key;
-    const int modulus = 1000000007;
-    return key % modulus;
+  inline size_t hashFunction(const int x, const int y,
+                             const int lightSourceNumber) const {
+    return static_cast<size_t>(x) +
+           nx_ * (static_cast<size_t>(y) +
+                  ny_ * static_cast<size_t>(lightSourceNumber));
   }
 
   std::shared_ptr<Field<double>> sharedVisibilityField_;
