@@ -4,26 +4,35 @@ Code for the paper **Kinematically-Constrained Marching for Optimal Reeds-Shepp 
 
 This repository contains a C++20 implementation of a visibility-based marching solver for computing locally optimal Reeds-Shepp distances and paths for car-like, kinematically constrained vehicles on 2D Cartesian occupancy grids.
 
-The method computes smooth Reeds-Shepp paths without discretizing vehicle orientations, motion primitives, or the governing PDE. Grid cells are used as workspace samples and pivot locations, while the vehicle model, headings, and path primitives remain continuous.
+The method computes smooth Reeds-Shepp paths without discretizing vehicle orientations, motion primitives, or the Reeds-Shepp distance-propagation partial differential equation (PDE) used by Fast Marching Method (FMM)-type methods. Grid cells are used as workspace samples and pivot locations, while the vehicle model, headings, and path primitives remain continuous. A separate transport PDE visibility model is used only to determine direct Reeds-Shepp reachability.
+
+This solver is a research-code release corresponding to the accepted T-RO paper. A newer implementation is in progress with broader handling of numerical singularities, degenerate geometric cases, and implementation edge cases.
+
+## Method Lineage
+
+The repository combines methods developed in the related papers and repositories:
+
+- [visibility-heuristic-path-planner](https://github.com/IbrahimSquared/visibility-heuristic-path-planner), from the [ICRA 2024 visibility transport paper](https://ieeexplore.ieee.org/document/10611529): computes grid visibility as a transported quantity using a first-order hyperbolic transport/advection model.
+- [visibility-based-marching](https://github.com/IbrahimSquared/visibility-based-marching), from the [RA-L 2024 VBM paper](https://ieeexplore.ieee.org/document/10679927): uses visibility structure to propagate exact one-to-all holonomic shortest-path information and predecessor/pivot structure over occupancy grids.
+- [accelerated-RS-planner](https://github.com/IbrahimSquared/accelerated-RS-planner), from the [T-RO 2025 Reeds-Shepp paper](https://doi.org/10.1109/TRO.2025.3554406): provides the accelerated free-space Reeds-Shepp connector used for continuous path and distance evaluation.
+- [underspecified-RS-planner](https://github.com/IbrahimSquared/underspecified-RS-planner), from the same T-RO 2025 Reeds-Shepp paper: provides the under-specified Reeds-Shepp routine used when a final position is fixed but the shortest final orientation must be selected.
+
+The present repository lifts those ingredients into obstacle-aware Reeds-Shepp marching: straight visibility becomes curvilinear Reeds-Shepp visibility, holonomic pivots become kinematically feasible switching states, and free-space Reeds-Shepp connectors become the local primitives propagated through the grid.
 
 ## What This Code Does
 
 The solver:
 
 - computes Reeds-Shepp distance maps on occupancy grids;
-- identifies regions that are directly reachable by Reeds-Shepp geodesics using an adapted visibility propagation model;
-- places pivots in occluded regions and optimizes the turning angle through each pivot;
+- identifies regions that are directly reachable by Reeds-Shepp geodesics using the visibility-as-transport method adapted to curvilinear Reeds-Shepp motion;
+- uses the visibility-based marching architecture to propagate distance, parent, and pivot structure over the map;
+- selects pivot cells from the still-visible/reachable part of the propagated front so that the vehicle can manoeuvre around obstacle interruptions and reach positions that were not directly reachable from the original configuration;
+- optimizes the continuous turning angle associated with each pivot-based manoeuvre;
 - reconstructs smooth paths composed of Reeds-Shepp motion primitives;
 - supports start-goal experiments by marching waves from two configurations until they meet;
 - exports the selected primitive sequence as `primitives.json`;
 - includes MATLAB scripts for visualizing distance maps, heading maps, reconstructed paths, and benchmark outputs;
 - includes scripts used for scalability and sampling-based RRT/RRTConnect comparisons.
-
-The implementation builds on three related components:
-
-- visibility-based marching for grid maps;
-- accelerated Reeds-Shepp distance/path evaluation;
-- under-specified Reeds-Shepp planning, where the final position is fixed and the final orientation is optimized.
 
 ## Sample Results
 
@@ -47,7 +56,7 @@ The method can compute the Reeds-Shepp distance field from a starting configurat
 
 ### Reeds-Shepp Visibility
 
-The marching scheme uses an adapted visibility model to determine which grid cells are directly reachable under Reeds-Shepp kinematics.
+The marching scheme uses the visibility transport model from the 2D visibility work, adapted from straight-line visibility to curvilinear Reeds-Shepp visibility. This determines which grid cells are directly reachable under the vehicle kinematics before additional pivot-based manoeuvres are needed.
 
 <p align="center">
   <img src="samples/reeds_shepp_visibility.jpg" width="55%">
@@ -64,9 +73,9 @@ Representative path overlays from the paper comparing the proposed method agains
 
 ## Main Idea
 
-Classical grid-based planners for car-like robots usually discretize the vehicle orientation, the control primitives, or the Hamilton-Jacobi/Eikonal PDE. This gives practical planners, but the path quality depends strongly on the chosen discretization and tuning parameters.
+Classical grid-based planners for car-like robots usually discretize the vehicle orientation, the control primitives, or the Hamilton-Jacobi/Eikonal PDE used to approximate anisotropic distance propagation. This gives practical planners, but the path quality depends strongly on the chosen discretization and tuning parameters.
 
-This solver instead propagates a Reeds-Shepp distance function over a 2D occupancy grid. In directly reachable regions, it evaluates the continuous free-space Reeds-Shepp distance. In occluded regions, it introduces pivots: grid-cell centers that the vehicle must pass through while executing a turning maneuver. The turning angle at each pivot is optimized, and the final path is reconstructed as a sequence of continuous Reeds-Shepp primitives.
+This solver instead propagates a Reeds-Shepp distance function over a 2D occupancy grid. In directly reachable regions, it evaluates the continuous free-space Reeds-Shepp distance. When obstacle geometry interrupts direct reachability, the marching process selects pivots from the still-visible/reachable part of the propagated front. These pivots act as switching states that allow the vehicle to manoeuvre around the obstacle and reach positions that were previously unreachable from the original configuration. The turning angle at each pivot is optimized, and the final path is reconstructed as a sequence of continuous Reeds-Shepp primitives.
 
 In practice, the marching cost scales approximately linearly with the number of grid cells, while path extraction depends on the number of reconstructed waypoints. The paper reports scaling experiments up to `2000 x 2000` grid cells.
 
@@ -207,7 +216,7 @@ These scripts are research/experiment scripts rather than a packaged benchmark h
 
 ## Notes and Limitations
 
-This is research code corresponding to the accepted T-RO paper. It is intended to make the proposed method reproducible and inspectable.
+This release reflects the implementation used for the accepted T-RO paper and is intended to make the proposed method reproducible and inspectable. The in-progress successor implementation is focused on broader coverage of singular, degenerate, and edge-case geometries.
 
 The current implementation uses a circular footprint/envelope for collision checking. This is conservative for elongated robots in narrow spaces. The paper discusses orientation-dependent rectangular or polygonal footprint checking as a future extension.
 
