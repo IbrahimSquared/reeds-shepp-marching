@@ -260,6 +260,146 @@ double wrapTo2Pi(double angle) {
 /*****************************************************************************/
 /*****************************************************************************/
 /*****************************************************************************/
+namespace {
+
+constexpr double kSameSideEps = 1e-9;
+
+inline double clampUnit(const double value) {
+  return std::max(-1.0, std::min(1.0, value));
+}
+
+inline void llPositivePivotCircle(const double x, const double y,
+                                  const double r, const double theta,
+                                  double &cx, double &cy) {
+  cx = x - r * std::sin(theta);
+  cy = y + r * std::cos(theta);
+}
+
+inline double llPositiveParentCircleX(const double x1, const double r) {
+  return x1 - r;
+}
+
+inline double llPositiveParentCircleY(const double y1) { return y1; }
+
+inline bool llPositiveSeedTheta(const double c1x, const double c1y,
+                                const double x2, const double y2,
+                                const double x3, const double y3,
+                                const double r, const double theta_guess,
+                                double &theta_out) {
+  double c2x = 0.0;
+  double c2y = 0.0;
+  llPositivePivotCircle(x2, y2, r, theta_guess, c2x, c2y);
+  const double h = std::hypot(x3 - c2x, y3 - c2y);
+  if (h <= kSameSideEps) {
+    return false;
+  }
+  const double beta = std::asin(clampUnit(r / h));
+  theta_out = 0.5 * wrapTo2Pi(std::atan2(y3 - c2y, x3 - c2x)) +
+              0.5 * beta +
+              0.5 * wrapTo2Pi(std::atan2(c2y - c1y, c2x - c1x));
+  return std::isfinite(theta_out);
+}
+
+inline bool llPositiveObjective(const double c1x, const double c1y,
+                                const double x2, const double y2,
+                                const double x3, const double y3,
+                                const double r, const double theta,
+                                double &value_out) {
+  double c2x = 0.0;
+  double c2y = 0.0;
+  llPositivePivotCircle(x2, y2, r, theta, c2x, c2y);
+  const double d1 = std::hypot(c2x - c1x, c2y - c1y);
+  const double h2 = (x3 - c2x) * (x3 - c2x) + (y3 - c2y) * (y3 - c2y);
+  const double r2 = r * r;
+  if (d1 <= kSameSideEps || h2 <= r2 + kSameSideEps) {
+    return false;
+  }
+  const double h = std::sqrt(h2);
+  const double tail = std::sqrt(h2 - r2);
+  const double beta = std::asin(clampUnit(r / h));
+  const double alpha1 = wrapTo2Pi(std::atan2(c2y - c1y, c2x - c1x));
+  const double alpha3 = wrapTo2Pi(std::atan2(y3 - c2y, x3 - c2x));
+  value_out = d1 + tail + r * (alpha1 + beta + alpha3);
+  return std::isfinite(value_out);
+}
+
+inline bool llPositiveGradient(const double c1x, const double c1y,
+                               const double x2, const double y2,
+                               const double x3, const double y3,
+                               const double r, const double theta,
+                               double &gradient_out) {
+  double c2x = 0.0;
+  double c2y = 0.0;
+  llPositivePivotCircle(x2, y2, r, theta, c2x, c2y);
+  const double dx_1 = c1x - x2;
+  const double dy_1 = c1y - y2;
+  const double dx_2 = x2 - x3;
+  const double dy_2 = y2 - y3;
+  const double d1 = std::hypot(c2x - c1x, c2y - c1y);
+  const double h2 = (x3 - c2x) * (x3 - c2x) + (y3 - c2y) * (y3 - c2y);
+  const double r2 = r * r;
+  if (d1 <= kSameSideEps || h2 <= r2 + kSameSideEps) {
+    return false;
+  }
+  const double h = std::sqrt(h2);
+  const double d2 = std::sqrt(h2 - r2);
+  const double c2 = d2 / h;
+  if (d2 <= kSameSideEps || c2 <= kSameSideEps) {
+    return false;
+  }
+  const double st2 = std::sin(theta);
+  const double ct2 = std::cos(theta);
+  gradient_out =
+      r * ((r * (r + ct2 * dy_2 - st2 * dx_2)) / h2 +
+           (r * r * (ct2 * dx_2 + st2 * dy_2)) / (c2 * h2 * h)) +
+      (r * (ct2 * dx_1 + st2 * dy_1)) / d1 -
+      r * (ct2 * dx_2 + st2 * dy_2) / d2;
+  return std::isfinite(gradient_out);
+}
+
+inline bool llPositiveContactParentTheta(const double x1, const double y1,
+                                         const double x2, const double y2,
+                                         const double r,
+                                         double &theta_out) {
+  const double c = std::hypot(x2 - x1, y2 - y1);
+  if (c <= kSameSideEps || c > 2.0 * r + kSameSideEps) {
+    return false;
+  }
+  const double discriminant = 4.0 * r * r - c * c;
+  if (discriminant < -kSameSideEps) {
+    return false;
+  }
+  const double root = std::sqrt(std::max(0.0, discriminant));
+  const double a = c * root + 2.0 * r * (x1 - x2);
+  const double b = c * c + 2.0 * r * (y1 - y2);
+  theta_out = -2.0 * std::atan2(a, b);
+  return std::isfinite(theta_out);
+}
+
+inline bool llPositiveContactTargetTheta(const double x2, const double y2,
+                                         const double x3, const double y3,
+                                         const double r,
+                                         double &theta_out) {
+  const double c = std::hypot(x3 - x2, y3 - y2);
+  if (c <= kSameSideEps || c > 2.0 * r + kSameSideEps) {
+    return false;
+  }
+  const double discriminant = 4.0 * r * r - c * c;
+  if (discriminant < -kSameSideEps) {
+    return false;
+  }
+  const double root = std::sqrt(std::max(0.0, discriminant));
+  const double a = c * root + 2.0 * r * (x2 - x3);
+  const double b = c * c + 2.0 * r * (y3 - y2);
+  theta_out = 2.0 * std::atan2(a, b);
+  return std::isfinite(theta_out);
+}
+
+} // namespace
+
+/*****************************************************************************/
+/*****************************************************************************/
+/*****************************************************************************/
 inline void Marching::RLPositive(const State s1, State &s2, State &s3,
                                  const Point p2_0, const Point p3_0) const {
   const double x1 = s1.x;
@@ -1060,106 +1200,62 @@ inline void Marching::LLPositive(const State s1, State &s2, State &s3,
   double x3 = s3.x;
   double y3 = s3.y;
 
-  const double st1 = sin(theta1);
-  const double ct1 = cos(theta1);
-  double cxl1 = x1 - r * st1 * st1 - r * ct1 * ct1;
-  double cyl1 = y1 + r * st1 * ct1 - r * ct1 * st1;
-  double cxl2 = x2 - r * sin(theta2);
-  double cyl2 = y2 + r * cos(theta2);
+  const double cxl1 = llPositiveParentCircleX(x1, r);
+  const double cyl1 = llPositiveParentCircleY(y1);
 
-  double frac = r / norm(cxl2, cyl2, x3, y3);
-  double B;
-  if (frac >= 1) {
-    B = pi / 2;
-  } else {
-    B = asin(frac);
+  double seeded_theta = theta2;
+  if (llPositiveSeedTheta(cxl1, cyl1, x2, y2, x3, y3, r, theta2,
+                          seeded_theta)) {
+    theta2 = seeded_theta;
   }
-  theta2 = 0.5 * wrapTo2Pi(atan2(y3 - cyl2, x3 - cxl2)) + 0.5 * B +
-           0.5 * wrapTo2Pi(atan2(cyl2 - cyl1, cxl2 - cxl1));
-
-  cxl2 = x2 - r * sin(theta2);
-  cyl2 = y2 + r * cos(theta2);
-
-  float H2;
-  const double dx_1 = (cxl1 - x2);
-  const double dy_1 = (cyl1 - y2);
 
   if (GD_bisection_ == 2) {
-    // Use bisection method to find the correct theta2 around the initial
-    // guess
-    double a = theta2 - 0.25;
-    double b = theta2 + 0.25;
-    double c = (b - a) / 3;
-    const double eps = 0.001;
-    const int exit_it = 100;
-    int it = 1;
-    while (fabs(b - a) > eps && it < exit_it) {
-      // two interior points
-      double t1 = a + c;
-      double t2 = b - c;
-      double f1, f2;
-      cxl2 = x2 - r * sin(t1);
-      cyl2 = y2 + r * cos(t1);
-      frac = r / norm(cxl2, cyl2, x3, y3);
-      if (frac >= 1) {
-        B = pi / 2;
+    double left = theta2 - 0.25;
+    double right = theta2 + 0.25;
+    constexpr double eps = 0.001;
+    for (int it = 0; std::abs(right - left) > eps && it < 100; ++it) {
+      const double t1 = left + (right - left) / 3.0;
+      const double t2 = right - (right - left) / 3.0;
+      double f1 = 0.0;
+      double f2 = 0.0;
+      const bool ok1 =
+          llPositiveObjective(cxl1, cyl1, x2, y2, x3, y3, r, t1, f1);
+      const bool ok2 =
+          llPositiveObjective(cxl1, cyl1, x2, y2, x3, y3, r, t2, f2);
+      if (ok1 && (!ok2 || f1 < f2)) {
+        right = t2;
+      } else if (ok2) {
+        left = t1;
       } else {
-        B = asin(frac);
-      }
-      f1 = 0.5 * wrapTo2Pi(atan2(y3 - cyl2, x3 - cxl2)) + 0.5 * B +
-           0.5 * wrapTo2Pi(atan2(cyl2 - cyl1, cxl2 - cxl1));
-      cxl2 = x2 - r * sin(t2);
-      cyl2 = y2 + r * cos(t2);
-      frac = r / norm(cxl2, cyl2, x3, y3);
-      if (frac >= 1) {
-        B = pi / 2;
-      } else {
-        B = asin(frac);
-      }
-      f2 = 0.5 * wrapTo2Pi(atan2(y3 - cyl2, x3 - cxl2)) + 0.5 * B +
-           0.5 * wrapTo2Pi(atan2(cyl2 - cyl1, cxl2 - cxl1));
-      if (f1 < f2) {
-        b = t2;
-      } else {
-        a = t1;
-      }
-      it++;
-    }
-    theta2 = 0.5 * (a + b);
-  } else {
-    const double dx_2 = (x2 - x3);
-    const double dy_2 = (y2 - y3);
-    double D1 = norm(cxl1, cyl1, cxl2, cyl2);
-    H2 = (x3 - cxl2) * (x3 - cxl2) + (y3 - cyl2) * (y3 - cyl2);
-    double D2 = sqrt(fabs(H2 - r * r));
-    double C2 = sqrt(fabs(1 - r * r / H2));
-    double st2 = sin(theta2);
-    double ct2 = cos(theta2);
-    double g =
-        r * ((r * (r + ct2 * dy_2 - st2 * dx_2)) / H2 +
-             (r * r * (ct2 * dx_2 + st2 * dy_2)) / (C2 * H2 * sqrt(H2))) +
-        (r * (ct2 * dx_1 + st2 * dy_1)) / D1 -
-        r * (ct2 * dx_2 + st2 * dy_2) / D2;
-    int iter = 1;
-    while (fabs(g) > 0.1) {
-      theta2 = theta2 - g * pi / (180 * sqrt(iter));
-      cxl2 = x2 - r * sin(theta2);
-      cyl2 = y2 + r * cos(theta2);
-      D1 = sqrt((cxl2 - cxl1) * (cxl2 - cxl1) + (cyl2 - cyl1) * (cyl2 - cyl1));
-      H2 = (x3 - cxl2) * (x3 - cxl2) + (y3 - cyl2) * (y3 - cyl2);
-      D2 = sqrt(fabs(H2 - r * r));
-      C2 = sqrt(fabs(1 - r * r / H2));
-      st2 = sin(theta2);
-      ct2 = cos(theta2);
-      g = r * ((r * (r + ct2 * dy_2 - st2 * dx_2)) / H2 +
-               (r * r * (ct2 * dx_2 + st2 * dy_2)) / (C2 * H2 * sqrt(H2))) +
-          (r * (ct2 * dx_1 + st2 * dy_1)) / D1 -
-          r * (ct2 * dx_2 + st2 * dy_2) / D2;
-      iter++;
-      if (iter > exit_it) {
         break;
       }
     }
+    theta2 = 0.5 * (left + right);
+  } else {
+    double g = 0.0;
+    for (int iter = 1;
+         iter <= exit_it &&
+         llPositiveGradient(cxl1, cyl1, x2, y2, x3, y3, r, theta2, g) &&
+         std::abs(g) > 0.1;
+         ++iter) {
+      theta2 = theta2 - g * pi / (180.0 * std::sqrt(iter));
+    }
+  }
+
+  const double l1p2 = std::hypot(cxl1 - x2, cyl1 - y2);
+  double contact_theta = theta2;
+  if (l1p2 < r &&
+      llPositiveContactParentTheta(x1, y1, x2, y2, r, contact_theta)) {
+    theta2 = contact_theta;
+  }
+
+  double cxl2 = 0.0;
+  double cyl2 = 0.0;
+  llPositivePivotCircle(x2, y2, r, theta2, cxl2, cyl2);
+  const double h = std::hypot(x3 - cxl2, y3 - cyl2);
+  if (h < r &&
+      llPositiveContactTargetTheta(x2, y2, x3, y3, r, contact_theta)) {
+    theta2 = contact_theta;
   }
 
   x2 = p2_0.x;
@@ -1168,50 +1264,7 @@ inline void Marching::LLPositive(const State s1, State &s2, State &s3,
   y3 = p3_0.y;
   theta2 = theta2 + theta1 - pi / 2;
 
-  cxl2 = x2 - r * sin(theta2);
-  cyl2 = y2 + r * cos(theta2);
-  const float l1p2 = sqrt(dx_1 * dx_1 + dy_1 * dy_1);
-  if (l1p2 < r) {
-    const float c1 = norm(x1, y1, x2, y2);
-    double sqrt_term = 4 * r * r - c1 * c1;
-    if (sqrt_term < 0) {
-      sqrt_term = 0; // Prevent NaN
-    }
-    const float A = c1 * sqrt(sqrt_term) + 2 * r * (x1 - x2);
-    // const float A = c1 * sqrt(4 * r * r - c1 * c1) + 2 * r * (x1 - x2);
-    const float B = c1 * c1 + 2 * r * (y1 - y2);
-    // theta2 = -2 * atan(A / B);
-    if (B == 0) {
-      theta2 = (A > 0) ? -pi : pi; // theta2 = -π or π
-    } else {
-      theta2 = -2 * atan(A / B);
-    }
-
-    cxl2 = x2 - r * sin(theta2);
-    cyl2 = y2 + r * cos(theta2);
-  }
-
-  H2 = norm(cxl2, cyl2, x3, y3);
-  if (H2 < r) {
-    const float c1 = norm(x2, y2, x3, y3);
-    double sqrt_term = 4 * r * r - c1 * c1;
-    if (sqrt_term < 0) {
-      sqrt_term = 0; // Prevent NaN
-    }
-    const float A = c1 * sqrt(sqrt_term) + 2 * r * (x2 - x3);
-    // const float A = c1 * sqrt(4 * r * r - c1 * c1) + 2 * r * (x2 - x3);
-    const float B = c1 * c1 + 2 * r * (y3 - y2);
-    if (B == 0) {
-      theta2 = (A > 0) ? pi : -pi;
-    } else {
-      theta2 = 2 * atan(A / B);
-    }
-    // theta2 = 2 * atan(A / B);
-    cxl2 = x2 - r * sin(theta2);
-    cyl2 = y2 + r * cos(theta2);
-  }
-
-  double t2 = 0;
+  double t2 = 0.0;
   urs_.getOmega(x2, y2, x3, y3, r, theta2, t2, true);
   t2 = t2 + theta2 - pi / 2;
 
