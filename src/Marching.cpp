@@ -2353,13 +2353,12 @@ inline double Marching::evaluateDistance(const int LS_x, const int LS_y,
     const int dx = neighbour_x - LS_x;
     const int dy = neighbour_y - LS_y;
 
-    const size_t xn =
-        static_cast<size_t>(dx * cos_theta + dy * sin_theta + mp_x);
-    const size_t yn =
-        static_cast<size_t>(-dx * sin_theta + dy * cos_theta + mp_y);
+    const double xn = dx * cos_theta + dy * sin_theta + mp_x;
+    const double yn = -dx * sin_theta + dy * cos_theta + mp_y;
 
     double d_accelerated;
-    if (xn + 1 >= distance_map_.nx() || yn + 1 >= distance_map_.ny()) {
+    if (xn < 0 || yn < 0 || xn + 1 >= distance_map_.nx() ||
+        yn + 1 >= distance_map_.ny()) {
       double to_theta;
       urs_.getOmega(LS_x, LS_y, neighbour_x, neighbour_y, r_, LS_theta,
                     to_theta);
@@ -3803,7 +3802,9 @@ void Marching::createNewPivot(const int x, const int y, const int neighbour_x,
   cameFrom_(neighbour_x, neighbour_y) = nb_of_sources_;
   const double d_accelerated = evaluateDistance(
       x, y, theta, nb_of_sources_, neighbour_x, neighbour_y, theta);
-  double g = gScore_(x, y) + d_accelerated;
+  // evaluateDistance returns an absolute root-to-target distance for pivot
+  // chains, so adding the pivot cell prefix again creates a distance jump.
+  double g = d_accelerated;
   gScore_(neighbour_x, neighbour_y) = g;
   origin_(neighbour_x, neighbour_y) = origin_(x, y);
   ++nb_of_sources_;
