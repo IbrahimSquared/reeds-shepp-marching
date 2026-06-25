@@ -1,12 +1,12 @@
 # Kinematically-Constrained Reeds-Shepp Marching
 
-Code for the paper **Kinematically-Constrained Marching for Optimal Reeds-Shepp Nonholonomic Path Planning on 2D Cartesian Grids**, accepted to **IEEE Transactions on Robotics (T-RO)** on April 22, 2026.
+Code for the paper **Kinematically Constrained Marching for Optimal Reeds–Shepp Nonholonomic Path Planning on 2-D Cartesian Grids**, published in **IEEE Transactions on Robotics (T-RO)**.
 
 This repository contains a C++20 implementation of a visibility-based marching solver for computing locally optimal Reeds-Shepp distances and paths for car-like, kinematically constrained vehicles on 2D Cartesian occupancy grids.
 
 The method computes smooth Reeds-Shepp paths without discretizing vehicle orientations, motion primitives, or the Reeds-Shepp distance-propagation partial differential equation (PDE) used by Fast Marching Method (FMM)-type methods. Grid cells are used as workspace samples and pivot locations, while the vehicle model, headings, and path primitives remain continuous. A separate transport PDE visibility model is used only to determine direct Reeds-Shepp reachability.
 
-This solver is a research-code release corresponding to the accepted T-RO paper. A newer implementation is in progress with broader handling of numerical singularities, degenerate geometric cases, and implementation edge cases.
+This solver is a research-code release corresponding to the published T-RO paper. A newer implementation is in progress with broader handling of numerical singularities, degenerate geometric cases, and implementation edge cases.
 
 ## Method Lineage
 
@@ -216,7 +216,7 @@ These scripts are research/experiment scripts rather than a packaged benchmark h
 
 ## Notes and Limitations
 
-This release reflects the implementation used for the accepted T-RO paper and is intended to make the proposed method reproducible and inspectable. The in-progress successor implementation is focused on broader coverage of singular, degenerate, and edge-case geometries.
+This release reflects the implementation used for the published T-RO paper and is intended to make the proposed method reproducible and inspectable. The in-progress successor implementation is focused on broader coverage of singular, degenerate, and edge-case geometries.
 
 The current implementation uses a circular footprint/envelope for collision checking. This is conservative for elongated robots in narrow spaces. The paper discusses orientation-dependent rectangular or polygonal footprint checking as a future extension.
 
@@ -227,16 +227,20 @@ The implementation has mainly been tuned and tested on occupancy-grid environmen
 If you use this code, please cite the paper:
 
 ```bibtex
-@article{ibrahim2026kinematically,
-  title   = {Kinematically-Constrained Marching for Optimal Reeds-Shepp Nonholonomic Path Planning on 2D Cartesian Grids},
-  author  = {Ibrahim, Ibrahim and Decr{\'e}, Wilm and Swevers, Jan},
-  journal = {IEEE Transactions on Robotics},
-  year    = {2026},
-  note    = {Accepted April 22, 2026}
+@ARTICLE{11534126,
+  author={Ibrahim, Ibrahim and Decré, Wilm and Swevers, Jan},
+  journal={IEEE Transactions on Robotics},
+  title={Kinematically Constrained Marching for Optimal Reeds–Shepp Nonholonomic Path Planning on 2-D Cartesian Grids},
+  year={2026},
+  volume={42},
+  number={},
+  pages={2215-2230},
+  keywords={Distance measurement;Cells (biology);Modeling;Turning;Algorithms;Vehicles;Timing;Optimization;Noise;Path planning;Computational geometry;constrained motion planning;motion and path planning;nonholonomic motion planning},
+  doi={10.1109/TRO.2026.3695992}
 }
 ```
 
-The DOI and final IEEE citation details will be added once available.
+[Published version](https://ieeexplore.ieee.org/document/11534126)
 
 ## Related Repositories
 
