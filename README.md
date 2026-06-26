@@ -1,6 +1,6 @@
 # Kinematically-Constrained Reeds-Shepp Marching
 
-Code for the paper **Kinematically Constrained Marching for Optimal Reeds–Shepp Nonholonomic Path Planning on 2-D Cartesian Grids**, published in **IEEE Transactions on Robotics (T-RO)**.
+Code for the paper [**Kinematically Constrained Marching for Optimal Reeds–Shepp Nonholonomic Path Planning on 2-D Cartesian Grids**](https://ieeexplore.ieee.org/document/11534126), published in **IEEE Transactions on Robotics (T-RO)**.
 
 This repository contains a C++20 implementation of a visibility-based marching solver for computing locally optimal Reeds-Shepp distances and paths for car-like, kinematically constrained vehicles on 2D Cartesian occupancy grids.
 
