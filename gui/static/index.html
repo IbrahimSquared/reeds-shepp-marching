@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reeds–Shepp Marching</title><link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><div><h1>Reeds–Shepp Marching</h1><p id="run-status" role="status">Loading GUI…</p></div><div id="coord-readout" aria-live="polite">x — · y —</div></header>
+<main>
+  <aside aria-label="March configuration">
+    <section><h2>Configuration</h2>
+      <label>Map <select id="map-select" aria-label="Map selection"></select></label>
+      <label class="upload">Upload map <input id="map-upload" type="file" accept="image/png,image/jpeg,image/bmp"></label>
+      <div class="grid"><label>Start x <input id="start-x" type="number" step="1"></label><label>Start y <input id="start-y" type="number" step="1"></label></div>
+      <label>Start orientation (degrees) <input id="start-heading" type="number" step="any"></label>
+      <label>Minimum turning radius (cells) <input id="radius" type="number" min="0.001" step="any"></label>
+      <label>Solver mode <select id="solver-mode"><option value="retained">One-to-all</option><option value="direct">One-to-one</option><option value="direct_fast">One-to-one (approximate)</option></select></label>
+      <p class="hint">One-to-all computes a distance field for repeated queries. One-to-one computes a path to a specified goal configuration. The approximate mode uses A* ordering and may return longer paths or miss a path.</p>
+      <label>Canvas interaction <select id="interaction-mode"><option value="start">Set start</option><option value="goal">Set goal configuration</option><option value="query">Query path</option></select></label>
+      <p class="hint">Set start or goal: click to place, drag its arrow to orient. Query path: drag across goal positions. 0° points right, 90° down.</p>
+      <div class="actions"><button id="march-button" class="primary">March</button><button id="cancel-button" disabled>Cancel</button></div>
+    </section>
+    <section><h2>Goal</h2>
+      <div class="grid"><label>Goal x <input id="goal-x" type="number" step="1"></label><label>Goal y <input id="goal-y" type="number" step="1"></label></div>
+      <label class="check"><input id="fixed-goal-heading" type="checkbox"> Specify final orientation</label>
+      <label>Goal orientation (degrees) <input id="goal-heading" type="number" step="any" value="0" disabled></label>
+      <button id="query-goal-button">Query goal</button>
+      <p class="hint">Query type: goal configuration (fixed orientation) when checked; goal position (free orientation) otherwise. One-to-one solver modes require a goal configuration.</p>
+      <p id="query-status" class="hint" role="status">March a distance field, then click or drag to query a path.</p>
+    </section>
+    <section><h2>Display</h2>
+      <label>Distance colormap <select id="palette-select"></select></label>
+      <p class="hint">Colors the Distance view and the distance overlay on the map.</p>
+      <label>Field opacity <input id="field-opacity" type="range" min="0" max="1" step=".05" value=".72"></label>
+      <label class="check"><input id="distance-overlay" type="checkbox"> Distance overlay on map</label>
+      <label class="check"><input id="colorbar-toggle" type="checkbox" checked> Show colorbar</label>
+      <div class="grid"><label>Contours <input id="contour-toggle" type="checkbox" checked></label><label>Count <input id="contour-count" type="number" min="2" max="150" value="60"></label></div>
+      <div class="grid"><label>Contour color <input id="contour-color" type="color" value="#202020"></label><label>Thickness <input id="contour-width" type="number" min=".25" max="8" step=".25" value="1"></label></div>
+      <fieldset class="marker"><legend>Field pivots</legend>
+        <div class="grid"><label>Marker <select id="pivot-mode"><option value="none" selected>None</option><option value="points">Points</option><option value="arrows">Arrows</option><option value="both">Both</option></select></label><label>Color <input id="pivot-color" type="color" value="#146c83"></label></div>
+        <details><summary>Marker style</summary>
+          <div class="grid"><label>Point shape <select id="pivot-shape"><option value="circle">Circle</option><option value="square">Square</option><option value="diamond">Diamond</option><option value="triangle">Triangle (orientation)</option><option value="cross">Cross ×</option><option value="plus">Plus +</option></select></label><label>Point fill <select id="pivot-fill"><option value="filled">Filled</option><option value="outline">Outline</option></select></label></div>
+          <div class="grid"><label>Point radius <input id="pivot-size" type="number" min=".25" max="40" step=".25" value="2"></label><label>Arrow length <input id="pivot-length" type="number" min=".5" max="200" step=".5" value="8"></label></div>
+          <div class="grid"><label>Line width <input id="pivot-width" type="number" min=".25" max="12" step=".25" value="1"></label><label>Opacity <input id="pivot-opacity" type="range" min=".05" max="1" step=".05" value="1"></label></div>
+          <div class="grid"><label>Arrow head <select id="pivot-head"><option value="filled">Filled</option><option value="open">Open</option><option value="none">None</option></select></label><label>Head (% length) <input id="pivot-head-size" type="number" min="5" max="80" step=".5" value="22.5"></label></div>
+          <label>Arrow anchor <select id="pivot-anchor"><option value="center">Centred on pivot</option><option value="tail">Tail at pivot</option></select></label>
+          <label class="check"><input id="pivot-halo" type="checkbox"> White halo</label>
+          <label class="check"><input id="pivot-zoom" type="checkbox"> Scale with zoom (sizes in map cells)</label>
+          <button type="button" class="reset">Reset style</button>
+        </details>
+      </fieldset>
+      <div class="grid"><label>Path color <input id="path-color" type="color" value="#e44f39"></label><label>Thickness <input id="path-width" type="number" min=".5" max="12" step=".5" value="2.5"></label></div>
+      <fieldset class="marker"><legend>Path waypoints</legend>
+        <div class="grid"><label>Marker <select id="path-pivot-mode"><option value="none" selected>None</option><option value="points">Points</option><option value="arrows">Arrows</option><option value="both">Both</option></select></label><label>Color <input id="path-pivot-color" type="color" value="#a63d00"></label></div>
+        <details><summary>Marker style</summary>
+          <div class="grid"><label>Point shape <select id="path-pivot-shape"><option value="circle">Circle</option><option value="square">Square</option><option value="diamond">Diamond</option><option value="triangle">Triangle (orientation)</option><option value="cross">Cross ×</option><option value="plus">Plus +</option></select></label><label>Point fill <select id="path-pivot-fill"><option value="filled">Filled</option><option value="outline">Outline</option></select></label></div>
+          <div class="grid"><label>Point radius <input id="path-pivot-size" type="number" min=".25" max="40" step=".25" value="3"></label><label>Arrow length <input id="path-pivot-length" type="number" min=".5" max="200" step=".5" value="12"></label></div>
+          <div class="grid"><label>Line width <input id="path-pivot-width" type="number" min=".25" max="12" step=".25" value="1"></label><label>Opacity <input id="path-pivot-opacity" type="range" min=".05" max="1" step=".05" value="1"></label></div>
+          <div class="grid"><label>Arrow head <select id="path-pivot-head"><option value="filled">Filled</option><option value="open">Open</option><option value="none">None</option></select></label><label>Head (% length) <input id="path-pivot-head-size" type="number" min="5" max="80" step=".5" value="22.5"></label></div>
+          <label>Arrow anchor <select id="path-pivot-anchor"><option value="center">Centred on waypoint</option><option value="tail">Tail at waypoint</option></select></label>
+          <label class="check"><input id="path-pivot-halo" type="checkbox"> White halo</label>
+          <label class="check"><input id="path-pivot-zoom" type="checkbox"> Scale with zoom (sizes in map cells)</label>
+          <button type="button" class="reset">Reset style</button>
+        </details>
+      </fieldset>
+      <p class="hint">Marker sizes are screen pixels, or map cells when scaled with zoom. Arrows show the orientation at each marked configuration.</p>
+      <label class="check"><input id="reversal-toggle" type="checkbox" checked> Show gear changes</label>
+      <label>Gear change color <input id="reversal-color" type="color" value="#9c2fb1"></label>
+      <label class="check"><input id="witness-toggle" type="checkbox" checked> Show collision points</label>
+    </section>
+    <section><h2>Query</h2>
+      <label class="check"><input id="collision-check" type="checkbox" checked> Check collisions</label>
+      <label>Path display step (cells) <input id="sample-step" type="number" min=".1" max="5" step=".1" value="0.5"></label>
+    </section>
+  </aside>
+  <section class="workspace">
+    <div class="tabs" role="tablist" aria-label="Views">
+      <button id="tab-map" role="tab" aria-selected="true" aria-controls="panel-map" data-tab="map">Map</button>
+      <button id="tab-distance" role="tab" aria-selected="false" aria-controls="panel-distance" data-tab="distance">Distance</button>
+      <button id="tab-laplacian" role="tab" aria-selected="false" aria-controls="panel-laplacian" data-tab="laplacian">Laplacian</button>
+      <button id="tab-metrics" role="tab" aria-selected="false" aria-controls="panel-metrics" data-tab="metrics">Metrics</button>
+    </div>
+    <div id="panel-map" class="canvas-panel" role="tabpanel"><canvas id="map-canvas" tabindex="0" aria-label="Map. Use the canvas interaction selector to set the start or query a path."></canvas></div>
+    <div id="panel-distance" class="canvas-panel hidden" role="tabpanel"><canvas id="distance-canvas" tabindex="0" aria-label="Distance field"></canvas></div>
+    <div id="panel-laplacian" class="canvas-panel hidden" role="tabpanel"><canvas id="laplacian-canvas" tabindex="0" aria-label="Laplacian field"></canvas></div>
+    <div id="panel-metrics" class="metrics hidden" role="tabpanel"><div id="metrics-content">No completed march.</div></div>
+    <div id="colorbar" class="hidden" aria-hidden="true"><span id="colorbar-max"></span><i></i><span id="colorbar-min"></span></div>
+  </section>
+</main><script src="/static/app.js" defer></script>
+</body></html>

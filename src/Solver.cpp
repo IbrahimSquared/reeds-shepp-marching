@@ -1,6 +1,6 @@
 #include "accelerated/Solver.hpp"
+#include "misc/AngleRemainder.hpp"
 
-#include <SFML/Graphics.hpp>
 #include <complex>
 #include <iostream>
 #include <numbers>
@@ -13,7 +13,7 @@ namespace RS_marching {
 /*****************************************************************************/
 /*****************************************************************************/
 inline double Solver::wrapToPi(double angle) const {
-  angle = fmod(angle + pi, 2 * pi);
+  angle = detail::boundedAngleRemainder(angle + pi, 2 * pi);
   if (angle < 0) {
     angle += 2 * pi;
   }
@@ -24,7 +24,7 @@ inline double Solver::wrapToPi(double angle) const {
 /*****************************************************************************/
 /*****************************************************************************/
 inline double Solver::wrapTo2Pi(double angle) const {
-  angle = fmod(angle + 2 * pi, 2 * pi);
+  angle = detail::boundedAngleRemainder(angle + 2 * pi, 2 * pi);
   if (angle < 0) {
     angle += 2 * pi;
   }
@@ -677,7 +677,7 @@ void Solver::setB(const double x, const double y, const double thetaf,
 
   if (thetaf >= 0) {
     // cond 13, 14, 19
-    if (thetaf < pi / 2) {
+    if (thetaf <= pi / 2) {
       double alpha = acos((3 * r * r + 0.25 * RL * RL) / (2 * r * RL));
       const double R0Lf = atan2(c0Ry_ - cfLy_, c0Rx_ - cfLx_);
       double beta = thetaf - pi / 2 - R0Lf;
@@ -733,12 +733,35 @@ void Solver::setB(const double x, const double y, const double thetaf,
       return;
     }
 
-    // thetaf > pi/2
+    // thetaf > pi/2 remains the strict lower branch after the boundary split.
     // 14, 15 split
     // CCC
     if (LR <= 2 * r && RL <= 2 * r) {
       P15(x, y, thetaf, d);
       d *= r;
+      if (std::isfinite(d) && d >= 0.0) {
+        const double t = lengths_[14][0];
+        const double u = lengths_[14][1];
+        const double v = lengths_[14][2];
+        const double w = thetaf - t + u;
+        // A finite P15 with this zero-winding heading decomposition already
+        // attains the nominal heading lower bound for this overlap.
+        if (std::isfinite(t) && std::isfinite(u) && std::isfinite(v) &&
+            std::isfinite(w) && t >= 0.0 && u <= 0.0 && w >= 0.0 &&
+            w < pi && v >= 0.0) {
+          cond = 15;
+          return;
+        }
+
+        double d14;
+        P14(x, y, thetaf, d14);
+        d14 *= r;
+        if (std::isfinite(d14) && d14 >= 0.0 && d14 < d) {
+          d = d14;
+          cond = 14;
+          return;
+        }
+      }
       cond = 15;
       return;
     }
@@ -863,41 +886,67 @@ void Solver::setB(const double x, const double y, const double thetaf,
 void Solver::acceleratedRSPlanner(const State &from, const State &to, double &d,
                                   const double r, int &cond, int &Q,
                                   bool offset) {
-  const double x0 = from.x;
-  const double y0 = from.y;
-  float theta0g;
+  double theta0g;
   if (offset) {
     theta0g = from.theta + pi / 2;
   } else {
     theta0g = from.theta;
   }
-  const double xng = to.x;
-  const double yng = to.y;
-  const float thetafg = to.theta;
+  acceleratedRSPlanner(preparePlanar(from.x, from.y, to.x, to.y, theta0g, r),
+                       theta0g, to.theta, d, r, cond, Q);
+}
+
+Solver::PlanarPreparation Solver::preparePlanar(
+    const double from_x, const double from_y, const double to_x,
+    const double to_y, const double evaluated_source_heading,
+    const double radius) {
+  const double x0 = 0.0;
+  const double y0 = 0.0;
+  const double xng = to_x - from_x;
+  const double yng = to_y - from_y;
 
   // Projection into local rotational frame
-  double xn = x0 - (x0 - xng) * cos(theta0g) - (y0 - yng) * sin(theta0g);
-  double yn = y0 + (x0 - xng) * sin(theta0g) - (y0 - yng) * cos(theta0g);
-  double thetaf = (thetafg - theta0g);
+  double xn = x0 - (x0 - xng) * cos(evaluated_source_heading) -
+              (y0 - yng) * sin(evaluated_source_heading);
+  double yn = y0 + (x0 - xng) * sin(evaluated_source_heading) -
+              (y0 - yng) * cos(evaluated_source_heading);
 
   // Project into Q1 - obtaining the mirrored configuration
   const double dx_ = xn - x0;
   const double dy_ = yn - y0;
-  const double theta0 = 0;
-  Q = 1;
+  int quadrant = 1;
   if (dx_ <= 0 && dy_ >= 0) {
     xn = 2 * x0 - xn;
-    thetaf = 2 * pi - (thetaf);
-    Q = 2;
+    quadrant = 2;
   } else if (dx_ <= 0 && dy_ <= 0) {
     xn = 2 * x0 - xn;
     yn = 2 * y0 - yn;
-    Q = 3;
+    quadrant = 3;
   } else if (dx_ >= 0 && dy_ <= 0) {
     yn = 2 * y0 - yn;
-    thetaf = 2 * pi - (thetaf);
-    Q = 4;
+    quadrant = 4;
   }
+  return {xn, yn, (xn - x0) / radius, (yn - y0) / radius,
+          atan2(yn - y0, xn - x0), quadrant};
+}
+
+void Solver::acceleratedRSPlanner(const PlanarPreparation &preparation,
+                                  const double evaluated_source_heading,
+                                  const double target_heading, double &d,
+                                  const double r, int &cond, int &Q) {
+#ifdef RS_COUNT_WORK
+  ++query_count;
+#endif
+  const double x0 = 0.0;
+  const double y0 = 0.0;
+  const double theta0g = evaluated_source_heading;
+  const double xn = preparation.xn;
+  const double yn = preparation.yn;
+  const double theta0 = 0;
+  Q = preparation.quadrant;
+  double thetaf = (target_heading - theta0g);
+  if (Q == 2 || Q == 4)
+    thetaf = 2 * pi - (thetaf);
   thetaf = wrapToPi(thetaf);
 
   // LHC and RHC
@@ -920,9 +969,9 @@ void Solver::acceleratedRSPlanner(const State &from, const State &to, double &d,
   const bool pred_2 = RR <= limit && LL <= limit && RL <= 2 * r;
   const bool pred_3 = LR <= 2 * r && LL <= limit && RL <= 2 * r;
 
-  const double x = (xn - x0) / r;
-  const double y = (yn - y0) / r;
-  const double beta0 = atan2(yn - y0, xn - x0);
+  const double x = preparation.x;
+  const double y = preparation.y;
+  const double beta0 = preparation.beta0;
 
   // Main Algorithm (4)
   if (pred_1 || pred_2 || pred_3) {
@@ -1090,6 +1139,47 @@ void Solver::backProjectMotion(const int condition, const int Q,
     }
   }
 };
+
+/*****************************************************************************/
+/*****************************************************************************/
+/*****************************************************************************/
+bool Solver::selectedWord(const int condition, const int quadrant,
+                          const double radius, char types[5], int gears[5],
+                          double lengths[5], std::size_t &count) const {
+  count = 0;
+  if (condition < 1 || condition > 20 || quadrant < 1 || quadrant > 4 ||
+      !std::isfinite(radius) || radius <= 0.0) {
+    return false;
+  }
+
+  for (int k = 0; k < 5; ++k) {
+    types[k] = 'N';
+  }
+  getMotionTypes(condition, types);
+  for (int k = 0; k < 5 && types[k] != 'N'; ++k) {
+    if (quadrant == 3 || quadrant == 4) {
+      if (types[k] == 'L') {
+        types[k] = 'R';
+      } else if (types[k] == 'R') {
+        types[k] = 'L';
+      }
+    }
+    double value = lengths_[condition - 1][k];
+    if (quadrant == 2 || quadrant == 3) {
+      value = -value;
+    }
+    if (!std::isfinite(value)) {
+      return false;
+    }
+    gears[k] = value > 0.0 ? 1 : -1;
+    lengths[k] = std::abs(value) * radius;
+    if (!std::isfinite(lengths[k])) {
+      return false;
+    }
+    ++count;
+  }
+  return count > 0;
+}
 
 /*****************************************************************************/
 /*****************************************************************************/

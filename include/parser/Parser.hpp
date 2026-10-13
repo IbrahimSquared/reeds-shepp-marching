@@ -14,10 +14,11 @@ struct Node {
   bool operator<(const Node &other) const { return f > other.f; }
 };
 
+enum class MapSource { Random, Image };
+
 struct Config {
-  bool bumps = true;
   bool pose_randomness = true;
-  int mode = 1;
+  MapSource mapSource = MapSource::Random;
   int GD_bisection = 1;
   size_t ncols = 100;
   size_t nrows = 100;
@@ -29,36 +30,20 @@ struct Config {
   float speedValue = 2.0;
   bool randomSeed = true;
   int seedValue = 0;
-  std::string imagePath = "C:\\..."; // or /home/...
+  std::string imagePath = "C:\\...";
   std::vector<Node> initialFrontline;
-  int target_x;
-  int target_y;
-  float visibilityThreshold = 0.5;
-  float angleThreshold = 45; // degrees
-  float radius = 1;
+  double radius = 1.0;
   bool timer = true;
-  bool greedy = true;
-  bool visibilityBasedSolver = true;
-  bool expandInObstacles = true;
-  bool vstar = true;
-  bool astar = true;
-  bool distanceFunction = true;
   bool saveResults = true;
-  bool saveCameFrom = true;
-  bool saveGScore = true;
-  bool saveFScore = true;
-  bool saveLightSources = true;
   bool saveVisibilityField = true;
   bool saveSpeedField = true;
-  bool savePath = true;
-  bool saveDistanceFunction = true;
   bool silent = false;
-  bool saveVisibilityBasedSolverImage = true;
-  bool saveDistanceFunctionImage = true;
-  int ballRadius = 5;
-  int number_of_contour_lines = 50;
   int exit_it = 10;
 };
+
+// Validate settings at the environment boundary, including direct C++ callers.
+// Throws std::invalid_argument with the offending key.
+void validateConfig(const Config &config);
 
 class ConfigParser {
 public:
@@ -76,7 +61,6 @@ public:
 private:
   ConfigParser() = default;
   Config config_;
-  std::vector<Node> parseVectorString(const std::string &str);
 };
 
 } // namespace RS_marching

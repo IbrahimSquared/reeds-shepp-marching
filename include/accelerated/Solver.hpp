@@ -1,8 +1,10 @@
 #ifndef SOLVER_HPP
 #define SOLVER_HPP
 
-#include <SFML/Graphics.hpp>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
 
 namespace RS_marching {
 
@@ -31,40 +33,52 @@ struct primitives {
 
 class Solver {
 public:
+  // Reusable for one fixed source/target-position pair. The evaluated source
+  // heading and radius must match those used by preparePlanar; only the target
+  // heading may vary between solves.
+  struct PlanarPreparation {
+    double xn = 0.0;
+    double yn = 0.0;
+    double x = 0.0;
+    double y = 0.0;
+    double beta0 = 0.0;
+    int quadrant = 1;
+  };
+  static_assert(sizeof(PlanarPreparation) == 48);
+#ifdef RS_COUNT_WORK
+  inline static thread_local std::uint64_t query_count = 0;
+#endif
   Solver() = default;
   // Proposed method
   void acceleratedRSPlanner(const State &from, const State &to, double &d,
                             const double r, int &cond, int &Q,
                             bool offset = false);
+  [[nodiscard]] static PlanarPreparation preparePlanar(
+      double from_x, double from_y, double to_x, double to_y,
+      double evaluated_source_heading, double radius);
+  void acceleratedRSPlanner(const PlanarPreparation &preparation,
+                            double evaluated_source_heading,
+                            double target_heading, double &d, double radius,
+                            int &cond, int &Q);
 
   void getMotionTypes(const int condition, char motionTypes[5]) const;
-  void backProjectMotion(const int Q, const int condition, char motionTypes[5]);
+  // Allocation-free, non-mutating export of the already selected word.
+  // Physical lengths and the legacy sign-of-zero gear convention match getPath.
+  [[nodiscard]] bool selectedWord(int condition, int quadrant, double radius,
+                                  char types[5], int gears[5],
+                                  double lengths[5], std::size_t &count) const;
+  void backProjectMotion(const int condition, const int Q, char motionTypes[5]);
   void getPath(const int condition, char motionTypes[5],
                std::vector<State> &path, const double r,
                primitives &primitives_) const;
 
 private:
-  /*!
-   * @brief Transforms final config to local rotational frame
-   * @param [in] start config
-   * @param [in] final config
-   * @param [in] final local config
-   */
-  void globalToLocal(const State &from, const State &to, State &to_local) const;
-
   // Main partitions of the algorithm
   void setA(const double x, const double y, const double thetaf, const double r,
             const double beta0, int &cond, double &d, const double xn,
             const double x0, const double yn);
   void setB(const double x, const double y, const double thetaf, const double r,
             int &cond, double &d, const double beta0);
-
-  // Forward simulate the path & check if it reaches the final config
-  void validityCheck(const State &from, const State &to, const int cond,
-                     const int Q, State &errors);
-
-  void getErrors(const std::vector<State> &path, const State &to,
-                 State &errors) const;
 
   inline double wrapToPi(const double angle) const;
   inline double wrapTo2Pi(const double angle) const;
@@ -119,12 +133,6 @@ private:
 
   // 21x5 matrix, holds segments lengths
   double lengths_[21][5] = {
-      {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},
-      {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},
-      {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},
-      {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}};
-  // 21x5 matrix, hold segment directions (+ or -)
-  int directions_[21][5] = {
       {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},
       {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},
       {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},

@@ -1,0 +1,50 @@
+name: build
+on: [push, pull_request]
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y libboost-dev libsfml-dev
+      - run: python -m pip install -r gui/requirements.txt
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build -j2
+      - run: build/RS_marching config/settings.config
+      - name: API and GUI smoke
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import subprocess
+          import tempfile
+          from PIL import Image
+          from gui.server import create_app
+          binary = Path('build/RS_marching_api').resolve()
+          with tempfile.TemporaryDirectory() as directory:
+              root = Path(directory)
+              image = root / 'free.png'
+              Image.new('L', (9, 9), 255).save(image)
+              commands = [
+                  {'command': 'march', 'map_path': str(image),
+                   'start': {'x': 4, 'y': 4, 'heading_deg': 0}, 'radius': 1},
+                  {'command': 'query', 'x': 6, 'y': 4, 'check_collisions': True},
+              ]
+              result = subprocess.run([str(binary)],
+                  input=''.join(json.dumps(c) + '\n' for c in commands),
+                  text=True, capture_output=True, check=True, timeout=30)
+              march, query = map(json.loads, result.stdout.splitlines())
+              assert march['ok'] and len(march['distance']) == 81
+              assert query['status'] == 'clear' and query['collision_count'] == 0
+              assert abs(query['reconstructed_length'] - 2) < 1e-8
+              app = create_app(root / 'gui', binary)
+              try:
+                  client = app.test_client()
+                  assert client.get('/').status_code == 200
+                  bootstrap = client.get('/api/bootstrap').get_json()
+                  assert len(bootstrap['maps']) == 11
+              finally:
+                  app.extensions['rs_manager'].close()
+          PY

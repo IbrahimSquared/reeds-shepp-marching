@@ -3,17 +3,24 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <sstream>
+#include <limits>
+#include <stdexcept>
 #include <string>
 
 namespace RS_marching {
+namespace {
+void validateDimensions(size_t nx, size_t ny) {
+  if (nx == 0 || ny == 0 || nx > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+      ny > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+      nx > std::numeric_limits<size_t>::max() / sizeof(double) / ny)
+    throw std::invalid_argument("environment dimensions must be positive and nonoverflowing");
+}
+} // namespace
 
-/*****************************************************************************/
-/*****************************************************************************/
-/*****************************************************************************/
 Environment::Environment(Config &config)
     : sharedConfig_(std::make_shared<Config>(config)) {
-  if (sharedConfig_->mode == 1) {
+  validateConfig(*sharedConfig_);
+  if (sharedConfig_->mapSource == MapSource::Random) {
     nx_ = sharedConfig_->ncols;
     ny_ = sharedConfig_->nrows;
 
@@ -25,23 +32,43 @@ Environment::Environment(Config &config)
     if (sharedConfig_->saveResults) {
       saveEnvironment();
     }
-  } else if (sharedConfig_->mode == 2) {
-    // loadMaps(sharedConfig_->imagePath);
+  } else if (sharedConfig_->mapSource == MapSource::Image) {
     if (loadImage(sharedConfig_->imagePath)) {
       if (sharedConfig_->saveResults) {
         saveEnvironment();
       }
     } else {
-      std::cerr << "Failed to load image" << std::endl;
-      return;
+      throw std::runtime_error("Failed to load image: " + sharedConfig_->imagePath);
     }
   }
 }
 
-/*****************************************************************************/
-/*****************************************************************************/
-/*****************************************************************************/
+Environment::Environment(Config &config,
+                         const Field<std::uint8_t> &occupancy)
+    : ny_(occupancy.ny()), nx_(occupancy.nx()),
+      sharedConfig_(std::make_shared<Config>(config)) {
+  validateConfig(*sharedConfig_);
+  validateDimensions(nx_, ny_);
+  resetEnvironment();
+  for (size_t y = 0; y < ny_; ++y) {
+    const auto *occupancyRow = occupancy.row_ptr(y);
+    auto *visibilityRow = sharedVisibilityField_->row_ptr(y);
+    for (size_t x = 0; x < nx_; ++x) {
+      if (occupancyRow[x] == 0) {
+        visibilityRow[x] = 0.0;
+      }
+    }
+  }
+  std::cout << "Loaded image of dimensions " << nx_ << "x" << ny_
+            << " successfully" << std::endl;
+  if (sharedConfig_->saveResults) {
+    saveEnvironment();
+  }
+}
+
 void Environment::generateNewEnvironmentFromSettings() {
+  validateConfig(*sharedConfig_);
+  validateDimensions(nx_, ny_);
   resetEnvironment();
   int seedValue = 0;
   if (!sharedConfig_->randomSeed) {
@@ -59,24 +86,23 @@ void Environment::generateNewEnvironmentFromSettings() {
   std::srand(seedValue);
 
   for (int i = 0; i < sharedConfig_->nb_of_obstacles; ++i) {
-    int col_1 = 1 + (std::rand() % (nx_ - 0 + 1));
-    int col_2 =
+    size_t col_1 = 1 + (std::rand() % (nx_ - 0 + 1));
+    size_t col_2 =
         col_1 + sharedConfig_->minWidth +
         (std::rand() % (sharedConfig_->maxWidth - sharedConfig_->minWidth + 1));
-    col_1 = std::min(col_1, (int)nx_ - 1);
-    col_2 = std::min(col_2, (int)nx_ - 1);
+    col_1 = std::min(col_1, nx_ - 1);
+    col_2 = std::min(col_2, nx_ - 1);
 
-    int row_1 = 1 + (std::rand() % (ny_ - 0 + 1));
-    int row_2 = row_1 + sharedConfig_->minHeight +
+    size_t row_1 = 1 + (std::rand() % (ny_ - 0 + 1));
+    size_t row_2 = row_1 + sharedConfig_->minHeight +
                 (std::rand() %
                  (sharedConfig_->maxHeight - sharedConfig_->minHeight + 1));
-    row_1 = std::min(row_1, (int)ny_ - 1);
-    row_2 = std::min(row_2, (int)ny_ - 1);
+    row_1 = std::min(row_1, ny_ - 1);
+    row_2 = std::min(row_2, ny_ - 1);
 
-    for (int j = col_1; j < col_2; ++j) {
-      for (int k = row_1; k < row_2; ++k) {
+    for (size_t j = col_1; j < col_2; ++j) {
+      for (size_t k = row_1; k < row_2; ++k) {
         sharedVisibilityField_->set(j, k, 0.0);
-        sharedSpeedField_->set(j, k, speedValue_);
       }
     }
   }
@@ -90,107 +116,16 @@ void Environment::generateNewEnvironmentFromSettings() {
   }
 }
 
-/*****************************************************************************/
-/*****************************************************************************/
-/*****************************************************************************/
-void Environment::generateNewEnvironment(size_t ncols, size_t nrows,
-                                         int nb_of_obstacles, int min_width,
-                                         int max_width, int min_height,
-                                         int max_height, int seedValue) {
-  nx_ = ncols;
-  ny_ = nrows;
-  resetEnvironment();
-
-  std::srand(seedValue);
-
-  for (int i = 0; i < nb_of_obstacles; ++i) {
-    int col_1 = 1 + (std::rand() % (nx_ - 0 + 1));
-    int col_2 = col_1 + min_width + (std::rand() % (max_width - min_width + 1));
-    col_1 = std::min(col_1, (int)nx_ - 1);
-    col_2 = std::min(col_2, (int)nx_ - 1);
-
-    int row_1 = 1 + (std::rand() % (ny_ - 0 + 1));
-    int row_2 =
-        row_1 + min_height + (std::rand() % (max_height - min_height + 1));
-    row_1 = std::min(row_1, (int)ny_ - 1);
-    row_2 = std::min(row_2, (int)ny_ - 1);
-
-    for (int j = col_1; j < col_2; ++j) {
-      for (int k = row_1; k < row_2; ++k) {
-        sharedVisibilityField_->set(j, k, 0.0);
-        sharedSpeedField_->set(j, k, speedValue_);
-      }
-    }
-  }
-
-  if (!sharedConfig_->silent) {
-    std::cout << "########################### Environment output "
-                 "############################ \n"
-              << "Generated new environment on request based on custom settings"
-              << std::endl;
-  }
-  if (sharedConfig_->saveResults) {
-    saveEnvironment();
-  }
-}
-
-/*****************************************************************************/
-/*****************************************************************************/
-/*****************************************************************************/
-void Environment::loadMaps(const std::string &filename) {
-  std::ifstream input(filename);
-  std::vector<std::vector<float>> visibilityField;
-  for (std::string line; std::getline(input, line);) {
-    std::vector<float> floatVector = stringToFloatVector(line, ' ');
-    visibilityField.push_back(floatVector);
-  }
-  nx_ = visibilityField.size();
-  ny_ = visibilityField[0].size();
-  std::cout << "Loaded vector of dimensions " << nx_ << "x" << ny_
-            << " successfully" << std::endl;
-
-  // Resets environment
-  resetEnvironment();
-
-  for (size_t i = 0; i < nx_; ++i) {
-    for (size_t j = 0; j < ny_; ++j) {
-      sharedVisibilityField_->set(i, j, visibilityField[i][j]);
-      if (visibilityField[i][j] == 1.0) {
-        sharedSpeedField_->set(i, j, 1.0);
-      } else {
-        sharedSpeedField_->set(i, j, speedValue_);
-      }
-    }
-  }
-  std::cout << "Loaded image of dimensions " << nx_ << "x" << ny_
-            << " successfully" << std::endl;
-}
-
-/*****************************************************************************/
-/*****************************************************************************/
-/*****************************************************************************/
-std::vector<float> Environment::stringToFloatVector(const std::string &str,
-                                                    char delimiter) {
-  std::vector<float> floatVector;
-  std::stringstream ss(str);
-  std::string item;
-  while (std::getline(ss, item, delimiter)) {
-    floatVector.push_back(std::stof(item));
-  }
-  return floatVector;
-}
-
-/*****************************************************************************/
-/*****************************************************************************/
-/*****************************************************************************/
 bool Environment::loadImage(const std::string &filename) {
-  uniqueLoadedImage_.reset(std::make_unique<sf::Image>().release());
+  validateConfig(*sharedConfig_);
+  sf::Image image;
   // Load the image from a file
-  if (!uniqueLoadedImage_->loadFromFile(filename)) {
+  if (!image.loadFromFile(filename)) {
     std::cout << "Error: Failed to load image" << std::endl;
     return false;
   } else {
-    auto size = uniqueLoadedImage_->getSize();
+    auto size = image.getSize();
+    validateDimensions(size.x, size.y);
     nx_ = size.x;
     ny_ = size.y;
 
@@ -200,14 +135,12 @@ bool Environment::loadImage(const std::string &filename) {
     // Access the pixel data of the image
     for (size_t x = 0; x < nx_; ++x) {
       for (size_t y = 0; y < ny_; ++y) {
-        pixel = uniqueLoadedImage_->getPixel(x, y);
+        pixel = image.getPixel(x, y);
         const int gray = 0.3 * pixel.r + 0.59 * pixel.g + 0.11 * pixel.b;
         if (gray > 128) {
           sharedVisibilityField_->set(x, y, 1.0);
-          sharedSpeedField_->set(x, y, 1.0);
         } else {
           sharedVisibilityField_->set(x, y, 0);
-          sharedSpeedField_->set(x, y, speedValue_);
         }
       }
     }
@@ -217,17 +150,10 @@ bool Environment::loadImage(const std::string &filename) {
   }
 }
 
-/*****************************************************************************/
-/*****************************************************************************/
-/*****************************************************************************/
 void Environment::resetEnvironment() {
   sharedVisibilityField_ = std::make_unique<Field<double>>(nx_, ny_, 1.0);
-  sharedSpeedField_ = std::make_unique<Field<double>>(nx_, ny_, 1.0);
 }
 
-/*****************************************************************************/
-/*****************************************************************************/
-/*****************************************************************************/
 void Environment::saveEnvironment() {
   // Define the path to the output file
   std::string outputFilePath = "./output/visibilityField.txt";
@@ -273,7 +199,9 @@ void Environment::saveEnvironment() {
     std::ostream &os = of;
     for (size_t i = 0; i < nx_; ++i) {
       for (size_t j = 0; j < ny_; ++j) {
-        os << sharedSpeedField_->get(i, j) << " ";
+        // Preserve the legacy x-major speed export, including image source's
+        // fixed obstacle speed (2.0) rather than the random-map setting.
+        os << (sharedVisibilityField_->get(i, j) == 0.0 ? speedValue_ : 1.0) << " ";
       }
       os << "\n";
     }

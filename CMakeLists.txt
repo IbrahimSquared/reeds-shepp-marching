@@ -1,50 +1,97 @@
-cmake_minimum_required(VERSION 3.10)
-
-project(RS_marching)
+cmake_minimum_required(VERSION 3.16)
+project(RS_marching LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# Default to Debug build if not specified
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
-  # set(CMAKE_BUILD_TYPE Debug)
+option(RS_CUSTOM_QUEUE_POP "Use the tested libstdc++-order arithmetic queue pop" ON)
+option(RS_COUNT_WORK "Count every ARS/URS call in diagnostic builds" OFF)
+option(ENABLE_GPROF "Enable GCC gprof profiling" OFF)
+set(RS_NATIVE_PGO_PHASE "OFF" CACHE STRING "Native-only PGO phase: OFF, GENERATE or USE")
+set_property(CACHE RS_NATIVE_PGO_PHASE PROPERTY STRINGS OFF GENERATE USE)
+set(RS_NATIVE_PGO_DIRECTORY "" CACHE PATH "Absolute native PGO data directory")
+if(NOT RS_NATIVE_PGO_PHASE MATCHES "^(OFF|GENERATE|USE)$")
+  message(FATAL_ERROR "RS_NATIVE_PGO_PHASE must be OFF, GENERATE or USE")
+endif()
+if(NOT RS_NATIVE_PGO_PHASE STREQUAL "OFF")
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(FATAL_ERROR "Native gcda PGO requires GCC")
+  endif()
+  if(NOT IS_ABSOLUTE "${RS_NATIVE_PGO_DIRECTORY}")
+    message(FATAL_ERROR "Native PGO requires an absolute RS_NATIVE_PGO_DIRECTORY")
+  endif()
+  if(ENABLE_GPROF)
+    message(FATAL_ERROR "Native PGO and gprof cannot be combined")
+  endif()
 endif()
 
-# Base flags for all builds
-set(cmake_cxx_flags "${cmake_cxx_flags} -g -fno-omit-frame-pointer")
-
-# Profiling-specific flags (only enable `-pg` for gprof)
-option(ENABLE_GPROF "Enable gprof profiling" OFF)
-if(ENABLE_GPROF)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -no-pie")
-endif()
-
-# Debug build settings (safe for debugging)
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -std=c++20 -D_USE_MATH_DEFINES")
-
-# Release build settings
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wpedantic -Wextra -Wnull-dereference -fexpensive-optimizations -mfpmath=sse -fno-trapping-math -fno-math-errno -flto=auto -std=c++20 -D_USE_MATH_DEFINES")
-
-
-# Set output directory to project source dir
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
-
-include_directories(include)
-
-# add_subdirectory(abseil-cpp)
-
-add_executable(RS_marching
-  src/main.cpp
-  src/UnderSpecifiedRSPlanner.cpp
-  src/Solver.cpp
-  src/Environment.cpp
-  src/Parser.cpp
-  src/Marching.cpp
-)
-
-find_package(absl CONFIG REQUIRED)
-find_package(unordered_dense CONFIG REQUIRED)
+find_package(Boost REQUIRED)
 find_package(SFML 2.5 COMPONENTS graphics REQUIRED)
-target_link_libraries(RS_marching PRIVATE sfml-graphics absl::flat_hash_map unordered_dense::unordered_dense)
+add_library(rs_build_options INTERFACE)
+target_include_directories(rs_build_options INTERFACE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(rs_build_options INTERFACE Boost::boost)
+target_compile_definitions(rs_build_options INTERFACE _USE_MATH_DEFINES
+  $<$<BOOL:${RS_CUSTOM_QUEUE_POP}>:RS_CUSTOM_QUEUE_POP=1>
+  $<$<BOOL:${RS_COUNT_WORK}>:RS_COUNT_WORK=1>)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(rs_build_options INTERFACE -Wall -Wpedantic -Wextra -Wnull-dereference
+    $<$<CONFIG:Release>:-fno-trapping-math;-fno-math-errno>)
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(rs_build_options INTERFACE
+    $<$<CONFIG:Release>:-fexpensive-optimizations;-flto=auto>)
+  target_link_options(rs_build_options INTERFACE $<$<CONFIG:Release>:-flto=auto>)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|i.86)$")
+    target_compile_options(rs_build_options INTERFACE $<$<CONFIG:Release>:-mfpmath=sse>)
+  endif()
+endif()
+if(ENABLE_GPROF)
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(FATAL_ERROR "ENABLE_GPROF requires GCC")
+  endif()
+  target_compile_options(rs_build_options INTERFACE -pg)
+  target_link_options(rs_build_options INTERFACE -pg -no-pie)
+endif()
+
+# Geometry/environment code is independent of the Marching class's API layout.
+# Compile it once for the ordinary native executable, API.
+set(RS_GEOMETRY_SOURCES
+  src/UnderSpecifiedRSPlanner.cpp src/Solver.cpp src/Environment.cpp src/Parser.cpp
+  src/DirectStartAudit.cpp src/DirectStartClearance.cpp src/ConnectorClearance.cpp)
+add_library(rs_common STATIC ${RS_GEOMETRY_SOURCES}
+  src/GoalConnector.cpp src/ReconstructionQuery.cpp)
+target_link_libraries(rs_common PUBLIC rs_build_options sfml-graphics)
+set(RS_MARCHING_SOURCES src/Marching.cpp src/MarchingGeometric.cpp)
+foreach(variant IN ITEMS native interactive)
+  add_library(rs_marching_${variant} STATIC ${RS_MARCHING_SOURCES} src/RetainedView.cpp)
+  target_link_libraries(rs_marching_${variant} PUBLIC rs_common)
+endforeach()
+# Every translation unit that inspects Marching must use the matching layout.
+target_compile_definitions(rs_marching_interactive PUBLIC RS_INTERACTIVE_API=1)
+
+if(RS_NATIVE_PGO_PHASE STREQUAL "OFF")
+  add_executable(RS_marching src/main.cpp)
+  target_link_libraries(RS_marching PRIVATE rs_marching_native)
+else()
+  # Profiled objects never enter the libraries used by the API. Keep
+  # all native objects in this target to isolate native profile data.
+  add_executable(RS_marching src/main.cpp ${RS_GEOMETRY_SOURCES} ${RS_MARCHING_SOURCES})
+  target_link_libraries(RS_marching PRIVATE rs_build_options sfml-graphics)
+  if(RS_NATIVE_PGO_PHASE STREQUAL "GENERATE")
+    set(RS_NATIVE_PGO_FLAGS "-fprofile-generate=${RS_NATIVE_PGO_DIRECTORY}")
+  else()
+    set(RS_NATIVE_PGO_FLAGS "-fprofile-use=${RS_NATIVE_PGO_DIRECTORY}"
+      -Werror=missing-profile -Werror=coverage-mismatch)
+  endif()
+  list(APPEND RS_NATIVE_PGO_FLAGS -fprofile-partial-training)
+  target_compile_options(RS_marching PRIVATE ${RS_NATIVE_PGO_FLAGS})
+  target_link_options(RS_marching PRIVATE ${RS_NATIVE_PGO_FLAGS})
+endif()
+add_executable(RS_marching_api src/interactive_main.cpp src/MarchingInteractive.cpp src/DirectQuery.cpp)
+target_link_libraries(RS_marching_api PRIVATE rs_marching_interactive)
+add_dependencies(RS_marching_api RS_marching)
