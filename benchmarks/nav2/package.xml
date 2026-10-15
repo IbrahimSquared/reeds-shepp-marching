@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rs_marching_nav2_benchmark</name>
+  <version>0.1.0</version>
+  <description>JSONL benchmark adapter for Nav2 1.1.20 SMAC Hybrid and Lattice.</description>
+  <maintainer email="ibrahim.ibrahim@kuleuven.be">IbrahimSquared</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>nav2_smac_planner</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

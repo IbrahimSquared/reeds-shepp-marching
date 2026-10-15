@@ -1,0 +1,42 @@
+{
+  "nav2_commit": "a097086719c88f781aa59788eca29ac6ca5e56db",
+  "generator_sha256": {
+    "constants.py": "9f618c72d2428df571271eefc193a1525377e6df85e9579b4e9a8e5e8521edb8",
+    "helper.py": "5638272e7ac6e1e8b0d76717d52f9d502b9561c0d05610652b52ce286263fed2",
+    "trajectory.py": "d8afa98e6e5e4bf9a3dfc0e8f5208b399fd79b7d1439b9d566390c485a6878e3",
+    "trajectory_generator.py": "542e8fd6585e1ec5682d323d03455f82978a7b8ca3eb8d8b71373237686e355c",
+    "lattice_generator.py": "49b4d7fd0044b6e479192c78306e5cf2621cb3821170d7fc0666538144cf8154",
+    "generate_motion_primitives.py": "8e35806b5fc556385900316af933477b69dbedda14c0e50296bf9a2e98200da7"
+  },
+  "resolution_m": 0.05,
+  "search_resolution_m": 0.025,
+  "headings": 16,
+  "stopping_thresholds": {
+    "5": 5,
+    "10": 5,
+    "20": 9
+  },
+  "directed_heading_connectivity": {
+    "5": {
+      "num_headings": 16,
+      "forward_edges": 72,
+      "directed_edges_including_reverse": 72,
+      "strongly_connected": true,
+      "unreachable_by_start_heading": {}
+    },
+    "10": {
+      "num_headings": 16,
+      "forward_edges": 48,
+      "directed_edges_including_reverse": 48,
+      "strongly_connected": true,
+      "unreachable_by_start_heading": {}
+    },
+    "20": {
+      "num_headings": 16,
+      "forward_edges": 72,
+      "directed_edges_including_reverse": 72,
+      "strongly_connected": true,
+      "unreachable_by_start_heading": {}
+    }
+  }
+}

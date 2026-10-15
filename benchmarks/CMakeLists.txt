@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(rs_benchmark_audit LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+add_subdirectory(.. solver EXCLUDE_FROM_ALL)
+add_executable(benchmark_audit audit.cpp)
+target_link_libraries(benchmark_audit PRIVATE rs_common)

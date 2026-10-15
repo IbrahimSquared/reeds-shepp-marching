@@ -1,0 +1,154 @@
+{
+  "schema": "rs-marching-benchmark-cases-v1",
+  "generator_seed": 20261015,
+  "rng": "numpy.random.default_rng (PCG64)",
+  "coordinates": {
+    "x": "right",
+    "y": "down",
+    "yaw_degrees": "0 right, 90 down"
+  },
+  "selection_rules": {
+    "free_space": "normalized grayscale > 128, matching src/Environment.cpp",
+    "component": "largest 4-connected free component; ties use first row-major component",
+    "positions": "integer cell centers; no map inflation or occupancy changes",
+    "starts": "3 distinct cells per map, uniformly sampled from eligible cells in the selected component",
+    "goals": "10 distinct cells per start, sampled uniformly without replacement from the selected component and at least 20 cells Euclidean from the start",
+    "yaw": "independent uniform [0,360), rounded to 6 decimal places",
+    "radii_cells": [
+      5,
+      10,
+      20
+    ],
+    "pose_pairs": "shared across all radii",
+    "counts": {
+      "maps": 10,
+      "starts_per_map": 3,
+      "goals_per_start": 10,
+      "rows": 900
+    }
+  },
+  "cases_path": "cases.csv",
+  "cases_sha256": "d44ef2f34de335f6649ed3d935cbb9092e09dd949fae20bcdc0f2c5b5bff8233",
+  "maps": [
+    {
+      "map_id": "waffle",
+      "source_path": "images/waffle_inflated.jpeg",
+      "source_sha256": "6ebda36eddcb8e579e7c885cef03c3e3f024bc80ddeb07cc2084eb1d645eeb8c",
+      "normalized_path": "maps/waffle.png",
+      "normalized_sha256": "741185bfc927a748729760d5801418b10e41d3d785025088a312c0b4a994581b",
+      "width": 551,
+      "height": 771,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 245754
+    },
+    {
+      "map_id": "01_u_traps",
+      "source_path": "images/examples/01_u_traps.png",
+      "source_sha256": "3fd8266b88c76bc18631433325468f560e68615408d74cda47f20376f91bf553",
+      "normalized_path": "maps/01_u_traps.png",
+      "normalized_sha256": "ef74ea0c278a1d0f9fc2c28987885a9acbecb405aa3f9c40317e2b9a979cab27",
+      "width": 384,
+      "height": 288,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 88271
+    },
+    {
+      "map_id": "02_t_junctions",
+      "source_path": "images/examples/02_t_junctions.png",
+      "source_sha256": "536e5106bee163dd91f0034dec8fad4652d7b060889b800500ccaba168ac5560",
+      "normalized_path": "maps/02_t_junctions.png",
+      "normalized_sha256": "e6700b964ab708b51e1c3f734929fbf9ae38184a3f596027403f4ab9d94f077e",
+      "width": 512,
+      "height": 384,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 54883
+    },
+    {
+      "map_id": "03_switchbacks",
+      "source_path": "images/examples/03_switchbacks.png",
+      "source_sha256": "d52e4ece4d02af2a9dd9c6c8f984de4588f29dd341792884a8560b8d214b13aa",
+      "normalized_path": "maps/03_switchbacks.png",
+      "normalized_sha256": "ad6d4feef9776d85a59549490b8265b3b21966b3c58e8ef2e5f2d4b35dd4fb69",
+      "width": 600,
+      "height": 360,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 178914
+    },
+    {
+      "map_id": "04_pillar_grid",
+      "source_path": "images/examples/04_pillar_grid.png",
+      "source_sha256": "10b818e87c8083d2c763801554a25a3bf483cf055f877033005770f71f7bc400",
+      "normalized_path": "maps/04_pillar_grid.png",
+      "normalized_sha256": "cf4f1f8884e1ba1d8f0f34988a2e74ab33fe1edd066e326c7664e613f0f549b5",
+      "width": 640,
+      "height": 640,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 328524
+    },
+    {
+      "map_id": "05_noisy_pillars",
+      "source_path": "images/examples/05_noisy_pillars.png",
+      "source_sha256": "2b1d036c79d043d71900b8ed646802b51e64cd4fb1ebf8b36993a7644b754f8d",
+      "normalized_path": "maps/05_noisy_pillars.png",
+      "normalized_sha256": "e9f1d9594b1bde7551385890b6605d31ec2347a739b20a2a06b3ebcbd539b67e",
+      "width": 768,
+      "height": 576,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 344045
+    },
+    {
+      "map_id": "06_nonconvex_islands",
+      "source_path": "images/examples/06_nonconvex_islands.png",
+      "source_sha256": "b9515a00e5a4a215e3f8907aad26132ac5ccebb3f2eb9742e6dc410ad6376a3b",
+      "normalized_path": "maps/06_nonconvex_islands.png",
+      "normalized_sha256": "7f3cd587de0f3729fe66ea1c462a4db259a82d68396707c09f2e7e91aeb94ff4",
+      "width": 800,
+      "height": 540,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 319816
+    },
+    {
+      "map_id": "07_rooms_and_doors",
+      "source_path": "images/examples/07_rooms_and_doors.png",
+      "source_sha256": "c2ff7e5089c08b309f82ee913c8f16eb9b6b5a020bf1eac63dc1b4bbd6b9ca54",
+      "normalized_path": "maps/07_rooms_and_doors.png",
+      "normalized_sha256": "87f4e97b7f17620440c36447bef747791de7536f6302f1956bd8e72c6b5b4be2",
+      "width": 720,
+      "height": 600,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 377372
+    },
+    {
+      "map_id": "08_large_maze",
+      "source_path": "images/examples/08_large_maze.png",
+      "source_sha256": "8a81de822734aed747305c3466672055176439dbc8afa03171a884c3e4b9b4a4",
+      "normalized_path": "maps/08_large_maze.png",
+      "normalized_sha256": "3e2966f429a73892d5f55e283ca0761810b11ba7aeeb5ca7024a046fb3d3bd15",
+      "width": 1024,
+      "height": 768,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 490971
+    },
+    {
+      "map_id": "09_large_corrals",
+      "source_path": "images/examples/09_large_corrals.png",
+      "source_sha256": "e14f8be74c2da041cf1ca1d39e03b79f9e61de1d5c9e0a4300c066e1f7e43c84",
+      "normalized_path": "maps/09_large_corrals.png",
+      "normalized_sha256": "992f517978e12a8bf2d01c91bcf884ee1417ed346e98cb041d10781cb74d02bd",
+      "width": 1280,
+      "height": 768,
+      "resolution_m_per_cell": 0.05,
+      "free_threshold": "gray > 128",
+      "largest_4_connected_free_component_cells": 831874
+    }
+  ]
+}

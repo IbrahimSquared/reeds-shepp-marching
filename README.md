@@ -159,6 +159,51 @@ alternative paths, necessary gear changes and curvature jumps can remain.
 
 </details>
 
+### Planner comparison
+
+**900 fixed queries per method:** ten maps, three turning radii, three starts and
+ten goals per start. Each method uses the same continuous query poses and
+point-vehicle collision model. Marching shares one field across ten goals.
+
+| Method | Valid paths / 900 | Valid within 4° / 900 | Length (cells) | Length / best observed | Mean cusps | Roughness |
+|---|---:|---:|---:|---:|---:|---:|
+| Reeds–Shepp Marching | 900 (100.0%) | 900 (100.0%) | 188.70 | 1.000 | 0.594 | 0.171 |
+| Smac Hybrid A* | 428 (47.6%) | 428 (47.6%) | 192.61 | 1.017 | 0.675 | 2.803 |
+| Smac State Lattice | 443 (49.2%) | 43 (4.8%) | 195.48 | 1.021 | 0.741 | 0.603 |
+
+Length, length ratio and roughness are **medians over the 320 cases valid for all
+three methods**. Cusps are **means over those same cases** and count changes between
+forward and reverse motion. Valid paths must pass the same continuous-clearance
+and motion checks. The 4° column also requires both endpoint orientations to be within 4°
+of the request. Nav2 quantizes orientations; accepted endpoint errors reach 2.50°
+for Hybrid A* and 13.16° for State Lattice. Thus lengths are not always to exactly
+the same pose. Best observed length is a comparison reference, **not an optimality
+certificate**. Roughness measures steering-curvature changes, excluding gear changes.
+
+All outcomes and recovered paths repeated across three serial trials. These results
+apply to the documented unsmoothed, zero-inflation settings, not complete Nav2
+navigation stacks. See the [protocol, timing results and reproduction guide](benchmarks/README.md),
+[per-case data](benchmarks/results/results.csv) and [fixed query poses](benchmarks/cases.csv).
+
+#### Benchmark examples
+
+One query on each of the ten maps, with all three returned paths overlaid.
+These cases pass continuous validation for every method. Arrows show the
+requested start and goal orientations. Panel labels are CSV case IDs: `s` identifies
+the start, `g` the goal, and `r` the minimum turning radius in cells.
+
+![Ten benchmark maps with validated Marching, Hybrid A* and State Lattice paths overlaid](images/readme/benchmark-maps.png)
+
+In the two cases below, Marching returns a valid path while both Nav2 paths
+intersect an obstacle. Red crosses mark collision witnesses; the close-ups
+show the obstacle corners at a scale of **4 × 4 cells**. These are selected
+failures under the benchmark settings; the table above reports all 900 cases.
+
+![Two benchmark cases with valid Marching paths and collision close-ups for Hybrid A* and State Lattice](images/readme/benchmark-failures.png)
+
+The [figure data and rendering instructions](benchmarks/README.md#reproduce-the-figures)
+include the exact plotted motions. Overlapping curves can hide one another.
+
 ## Paper implementation and migration
 
 The [paper implementation at `8a41670`](https://github.com/IbrahimSquared/reeds-shepp-marching/tree/8a41670a873f9b4abbfd707dca9283d37fa185ba)
